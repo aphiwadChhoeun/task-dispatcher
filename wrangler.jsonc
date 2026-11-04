@@ -1,0 +1,59 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "task-dispatcher",
+  "main": "./worker.ts",
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "vars": {
+    "APP_URL": "http://localhost:8787",
+    "APP_NAME": "Task Dispatcher",
+    "MAP_PROVIDER": "osm",
+    "TILE_URL": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "GEOCODER": "nominatim",
+    "GEOCODER_URL": "https://nominatim.openstreetmap.org",
+    "ROUTING_PROVIDER": "osrm",
+    "ROUTING_URL": "https://router.project-osrm.org",
+    "SESSION_TTL_DAYS": "7",
+    "LOCATION_RETENTION_DAYS": "7",
+    "LOCATION_STALE_SECONDS": "120",
+    "LOCATION_THROTTLE_MS": "7000",
+    "MAX_UPLOAD_BYTES": "8388608",
+    "ENABLE_PUSH": "false"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "task-dispatcher-db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "task-dispatcher-files"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "REALTIME",
+        "class_name": "RealtimeHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["RealtimeHub"]
+    }
+  ]
+}

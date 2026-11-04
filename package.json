@@ -1,0 +1,62 @@
+{
+  "name": "task-dispatcher",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Task Dispatcher - field task dispatch and live location tracking on Cloudflare",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "preview": "opennextjs-cloudflare build && wrangler dev",
+    "deploy": "opennextjs-cloudflare build && wrangler deploy",
+    "cf-typegen": "wrangler types --include-runtime=false",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "db:seed": "tsx scripts/seed.ts",
+    "db:seed:local": "npm run db:seed && wrangler d1 execute DB --local --file=.wrangler/seed.sql",
+    "db:reset": "tsx scripts/reset.ts && npm run db:migrate:local && npm run db:seed:local",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "e2e:server": "npm run db:reset && opennextjs-cloudflare build && wrangler dev --port 8787 --ip 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "icons": "tsx scripts/generate-icons.ts"
+  },
+  "dependencies": {
+    "@opennextjs/cloudflare": "1.20.16",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.4",
+    "lucide-react": "^0.577.0",
+    "maplibre-gl": "^5.9.0",
+    "next": "16.4.5",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwind-merge": "^3.4.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@tailwindcss/postcss": "^4.3.4",
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "16.4.5",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.3.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.8",
+    "wrangler": "^4.157.0"
+  },
+  "allowScripts": {
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "sharp@0.34.5": true,
+    "workerd@1.20261103.1": true
+  }
+}

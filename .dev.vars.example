@@ -1,0 +1,5 @@
+# Local development secrets for Wrangler (wrangler dev / preview).
+# Copy to `.dev.vars` and replace values. Never commit `.dev.vars`.
+AUTH_SECRET="dev-only-change-me-4f8c2d1e9a7b6c5d4e3f2a1b0c9d8e7f"
+APP_URL="http://localhost:8787"
+NEXT_PUBLIC_REALTIME_URL=""
