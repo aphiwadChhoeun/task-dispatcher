@@ -78,7 +78,7 @@ export default async function TaskersPage({
               key={tasker.id}
               className="transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-lift"
             >
-              <CardContent className="space-y-3.5 p-4">
+              <CardContent className="space-y-3.5 p-4 sm:p-6 sm:pt-6">
                 <div className="flex items-start gap-3">
                   <span
                     className="flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white ring-1 ring-black/10"

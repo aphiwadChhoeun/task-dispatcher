@@ -257,7 +257,7 @@ export default async function DispatcherTaskDetailPage({
               {task.taskerId ? (
                 <Link
                   href={`/taskers/${task.taskerId}`}
-                  className="mt-2 inline-block text-xs font-semibold text-primary hover:underline"
+                  className="mt-2 inline-block text-xs font-semibold text-primary hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
                 >
                   View {task.taskerName ?? "tasker"} profile
                 </Link>

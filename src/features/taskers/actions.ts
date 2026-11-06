@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { invitations, sessions, taskers, users } from "@/lib/db/schema";
+import { invitations, memberships, sessions, taskers, users } from "@/lib/db/schema";
 import { assertSameOrigin } from "@/lib/csrf";
 import { AppError, ConflictError, NotFoundError } from "@/lib/errors";
 import { reportError } from "@/lib/observability";
@@ -44,7 +44,9 @@ async function createInvite(userId: string, orgId: string, createdBy: string) {
   const raw = newInvitationToken();
   const id = await sha256Hex(raw);
   const expiresAt = new Date(Date.now() + config.auth.inviteTtlDays * 24 * 60 * 60 * 1000);
-  await db.delete(invitations).where(eq(invitations.userId, userId));
+  await db
+    .delete(invitations)
+    .where(and(eq(invitations.userId, userId), eq(invitations.orgId, orgId)));
   await db.insert(invitations).values({
     id,
     orgId,
@@ -87,43 +89,95 @@ export async function createTaskerAction(
 
     const db = getDb();
     const existing = await db
-      .select({ id: users.id })
+      .select()
       .from(users)
-      .where(and(eq(users.orgId, session.orgId), eq(users.email, parsed.data.email)))
+      .where(eq(users.email, parsed.data.email))
       .get();
-    if (existing) throw new ConflictError("A user with that email already exists");
 
-    const userId = crypto.randomUUID();
+    if (existing) {
+      const existingMembership = await db
+        .select({ id: memberships.id })
+        .from(memberships)
+        .where(
+          and(eq(memberships.orgId, session.orgId), eq(memberships.userId, existing.id)),
+        )
+        .get();
+      if (existingMembership) {
+        throw new ConflictError("That person is already a member of this organization.");
+      }
+
+      const dispatcherMembership = await db
+        .select({ id: memberships.id })
+        .from(memberships)
+        .where(
+          and(
+            eq(memberships.userId, existing.id),
+            inArray(memberships.role, ["dispatcher", "admin"]),
+          ),
+        )
+        .get();
+      if (dispatcherMembership) {
+        throw new ConflictError(
+          "That email belongs to a dispatcher account. Dispatchers can only belong to one organization.",
+        );
+      }
+      if (existing.status === "deactivated") {
+        throw new ConflictError("That account has been deactivated.");
+      }
+    }
+
+    const userId = existing?.id ?? crypto.randomUUID();
+    const displayName = existing?.name ?? parsed.data.name;
     const now = new Date();
-    await db.batch([
-      db.insert(users).values({
-        id: userId,
-        orgId: session.orgId,
-        role: "tasker",
-        name: parsed.data.name,
-        email: parsed.data.email,
-        phone: parsed.data.phone ?? null,
-        passwordHash: null,
-        status: "invited",
-        createdAt: now,
-        updatedAt: now,
-      }),
-      db.insert(taskers).values({
-        userId,
-        orgId: session.orgId,
-        skills: parseSkills(parsed.data.skills),
-        vehicle: parsed.data.vehicle ?? null,
-        availability: parsed.data.availability ?? null,
-        color: parsed.data.color,
-        createdAt: now,
-      }),
-    ]);
+    const membershipId = crypto.randomUUID();
+    const membershipValues = {
+      id: membershipId,
+      orgId: session.orgId,
+      userId,
+      role: "tasker" as const,
+      status: "invited" as const,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const taskerValues = {
+      userId,
+      orgId: session.orgId,
+      skills: parseSkills(parsed.data.skills),
+      vehicle: parsed.data.vehicle ?? null,
+      availability: parsed.data.availability ?? null,
+      color: parsed.data.color,
+      createdAt: now,
+    };
+
+    if (existing) {
+      await db.batch([
+        db.insert(memberships).values(membershipValues),
+        db.insert(taskers).values(taskerValues),
+      ]);
+    } else {
+      await db.batch([
+        db.insert(users).values({
+          id: userId,
+          orgId: session.orgId,
+          role: "tasker",
+          name: parsed.data.name,
+          email: parsed.data.email,
+          phone: parsed.data.phone ?? null,
+          passwordHash: null,
+          status: "invited",
+          createdAt: now,
+          updatedAt: now,
+        }),
+        db.insert(memberships).values(membershipValues),
+        db.insert(taskers).values(taskerValues),
+      ]);
+    }
 
     const url = await createInvite(userId, session.orgId, session.user.id);
     await sendEmail({
       to: parsed.data.email,
-      subject: "You are invited to Task Dispatcher",
-      text: `Hi ${parsed.data.name},\n\nYour dispatcher invited you to Task Dispatcher. Set your password here: ${url}\n\nThis link expires in ${config.auth.inviteTtlDays} days.`,
+      subject: `You are invited to ${session.organization.name} on Task Dispatcher`,
+      text: `Hi ${displayName},\n\n${session.user.name} invited you to join ${session.organization.name} on Task Dispatcher. ${existing ? "Accept the invitation to add this organization to your existing account" : "Set your password"} here: ${url}\n\nThis link expires in ${config.auth.inviteTtlDays} days.`,
     });
 
     await recordAudit(db, {
@@ -137,7 +191,7 @@ export async function createTaskerAction(
 
     revalidatePath("/taskers");
     return {
-      success: `${parsed.data.name} was invited. Share the invite link so they can set a password.`,
+      success: `${displayName} was invited. Share the invite link so they can join ${session.organization.name}.`,
       inviteUrl: url,
     };
   } catch (error) {
@@ -169,12 +223,13 @@ export async function updateTaskerAction(
     const db = getDb();
     const tasker = await db
       .select({ id: users.id })
-      .from(users)
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
       .where(
         and(
-          eq(users.id, parsed.data.taskerId),
-          eq(users.orgId, session.orgId),
-          eq(users.role, "tasker"),
+          eq(memberships.userId, parsed.data.taskerId),
+          eq(memberships.orgId, session.orgId),
+          eq(memberships.role, "tasker"),
         ),
       )
       .get();
@@ -183,10 +238,10 @@ export async function updateTaskerAction(
     const emailOwner = await db
       .select({ id: users.id })
       .from(users)
-      .where(and(eq(users.orgId, session.orgId), eq(users.email, parsed.data.email)))
+      .where(eq(users.email, parsed.data.email))
       .get();
     if (emailOwner && emailOwner.id !== tasker.id) {
-      throw new ConflictError("Another user already uses that email");
+      throw new ConflictError("Another account already uses that email");
     }
 
     await db.batch([
@@ -207,7 +262,7 @@ export async function updateTaskerAction(
           availability: parsed.data.availability ?? null,
           color: parsed.data.color,
         })
-        .where(eq(taskers.userId, tasker.id)),
+        .where(and(eq(taskers.userId, tasker.id), eq(taskers.orgId, session.orgId))),
     ]);
 
     await recordAudit(db, {
@@ -243,42 +298,51 @@ export async function setTaskerStatusAction(
 
     const db = getDb();
     const tasker = await db
-      .select()
-      .from(users)
+      .select({ membership: memberships, user: users })
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
       .where(
         and(
-          eq(users.id, parsed.data.taskerId),
-          eq(users.orgId, session.orgId),
-          eq(users.role, "tasker"),
+          eq(memberships.userId, parsed.data.taskerId),
+          eq(memberships.orgId, session.orgId),
+          eq(memberships.role, "tasker"),
         ),
       )
       .get();
     if (!tasker) throw new NotFoundError("Tasker not found");
 
     await db
-      .update(users)
+      .update(memberships)
       .set({ status: parsed.data.status, updatedAt: new Date() })
-      .where(eq(users.id, tasker.id));
+      .where(eq(memberships.id, tasker.membership.id));
 
     if (parsed.data.status === "deactivated") {
-      await db.delete(sessions).where(eq(sessions.userId, tasker.id));
+      await db
+        .delete(sessions)
+        .where(
+          and(
+            eq(sessions.userId, tasker.user.id),
+            eq(sessions.orgId, session.orgId),
+          ),
+        );
     }
 
     await recordAudit(db, {
       orgId: session.orgId,
       actorId: session.user.id,
       action: `tasker.${parsed.data.status === "active" ? "reactivated" : "deactivated"}`,
-      entity: "user",
-      entityId: tasker.id,
+      entity: "membership",
+      entityId: tasker.membership.id,
+      metadata: { userId: tasker.user.id },
     });
 
     revalidatePath("/taskers");
-    revalidatePath(`/taskers/${tasker.id}`);
+    revalidatePath(`/taskers/${tasker.user.id}`);
     return {
       success:
         parsed.data.status === "active"
-          ? `${tasker.name} can sign in again.`
-          : `${tasker.name} was deactivated and signed out.`,
+          ? `${tasker.user.name} can sign in to this organization again.`
+          : `${tasker.user.name} was deactivated for this organization.`,
     };
   } catch (error) {
     if (error instanceof AppError) return { error: error.message };
@@ -301,26 +365,27 @@ export async function resendTaskerInviteAction(
 
     const db = getDb();
     const tasker = await db
-      .select()
-      .from(users)
+      .select({ membership: memberships, user: users })
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
       .where(
         and(
-          eq(users.id, parsed.data.taskerId),
-          eq(users.orgId, session.orgId),
-          eq(users.role, "tasker"),
+          eq(memberships.userId, parsed.data.taskerId),
+          eq(memberships.orgId, session.orgId),
+          eq(memberships.role, "tasker"),
         ),
       )
       .get();
     if (!tasker) throw new NotFoundError("Tasker not found");
-    if (tasker.status !== "invited") {
+    if (tasker.membership.status !== "invited") {
       return { error: "Only a pending invitation can be regenerated." };
     }
 
-    const url = await createInvite(tasker.id, session.orgId, session.user.id);
+    const url = await createInvite(tasker.user.id, session.orgId, session.user.id);
     await sendEmail({
-      to: tasker.email,
-      subject: "Your new Task Dispatcher invite link",
-      text: `Hi ${tasker.name},\n\nHere is a fresh invite link: ${url}\n\nThis link expires in ${config.auth.inviteTtlDays} days.`,
+      to: tasker.user.email,
+      subject: `Your new ${session.organization.name} invite link`,
+      text: `Hi ${tasker.user.name},\n\nHere is a fresh invite to join ${session.organization.name} on Task Dispatcher: ${url}\n\nThis link expires in ${config.auth.inviteTtlDays} days.`,
     });
     revalidatePath("/taskers");
     return { success: "New invite link generated. The previous link no longer works.", inviteUrl: url };

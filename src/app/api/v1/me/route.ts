@@ -13,6 +13,16 @@ export async function GET(request: Request) {
         orgId: session.orgId,
         status: session.user.status,
       },
+      membership: {
+        id: session.membership.id,
+        role: session.membership.role,
+        status: session.membership.status,
+      },
+      organization: {
+        id: session.organization.id,
+        name: session.organization.name,
+        slug: session.organization.slug,
+      },
       home: homeForRole(session.user.role),
     });
   });

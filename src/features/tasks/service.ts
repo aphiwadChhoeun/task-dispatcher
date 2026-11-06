@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import type { Db } from "@/lib/db";
 import {
+  memberships,
   messageThreads,
   taskAttachments,
   taskerPresence,
@@ -12,7 +13,6 @@ import {
   users,
   type Task,
   type TaskStatus,
-  type User,
 } from "@/lib/db/schema";
 import { AppError, ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { recordAudit } from "@/features/audit/log";
@@ -23,7 +23,7 @@ import { TASK_STATUS_LABELS, checkTransition } from "./state-machine";
 import type { TaskFormValues } from "./schemas";
 import { ensureTaskThread, getTaskById } from "./queries";
 
-type Actor = Pick<User, "id" | "orgId" | "role" | "name">;
+type Actor = { id: string; orgId: string; role: Role; name: string };
 
 function taskLink(actor: Actor, taskId: string): string {
   return isDispatcherRole(actor.role) ? `/tasks/${taskId}` : `/my-tasks/${taskId}`;
@@ -31,14 +31,15 @@ function taskLink(actor: Actor, taskId: string): string {
 
 async function activeTasker(db: Db, orgId: string, taskerId: string) {
   return db
-    .select()
-    .from(users)
+    .select({ user: users })
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
     .where(
       and(
-        eq(users.id, taskerId),
-        eq(users.orgId, orgId),
-        eq(users.role, "tasker"),
-        eq(users.status, "active"),
+        eq(memberships.userId, taskerId),
+        eq(memberships.orgId, orgId),
+        eq(memberships.role, "tasker"),
+        eq(memberships.status, "active"),
       ),
     )
     .get();
@@ -47,12 +48,13 @@ async function activeTasker(db: Db, orgId: string, taskerId: string) {
 async function dispatcherIds(db: Db, orgId: string): Promise<string[]> {
   const rows = await db
     .select({ id: users.id })
-    .from(users)
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
     .where(
       and(
-        eq(users.orgId, orgId),
-        inArray(users.role, ["dispatcher", "admin"]),
-        eq(users.status, "active"),
+        eq(memberships.orgId, orgId),
+        inArray(memberships.role, ["dispatcher", "admin"]),
+        eq(memberships.status, "active"),
       ),
     );
   return rows.map((row) => row.id);
@@ -79,7 +81,7 @@ export async function createTask(actor: Actor, values: TaskFormValues): Promise<
     db.insert(tasks).values({
       id,
       orgId: actor.orgId,
-      taskerId: tasker.id,
+      taskerId: tasker.user.id,
       createdBy: actor.id,
       title: values.title,
       description: values.description ?? null,
@@ -127,15 +129,15 @@ export async function createTask(actor: Actor, values: TaskFormValues): Promise<
     payload: {
       taskId: id,
       title: values.title,
-      taskerId: tasker.id,
-      taskerName: tasker.name,
+      taskerId: tasker.user.id,
+      taskerName: tasker.user.name,
       status: "assigned",
       priority: values.priority,
       scheduledStart: start.getTime(),
     },
-    audience: eventAudience(tasker.id),
+    audience: eventAudience(tasker.user.id),
     notification: {
-      userIds: [tasker.id],
+      userIds: [tasker.user.id],
       title: "New task assigned",
       body: values.title,
       link: `/my-tasks/${id}`,

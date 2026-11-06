@@ -39,7 +39,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { user } = await requireDispatcher();
+  const { user, organization } = await requireDispatcher();
   const params = await searchParams;
   const filters = taskFiltersFromSearchParams(params);
   const view = filters.view ?? "kanban";
@@ -116,6 +116,27 @@ export default async function DashboardPage({
         }
       />
 
+      {taskers.length === 0 ? (
+        <Card className="border-primary/20 bg-primary/[0.035]">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/[0.09] text-primary ring-1 ring-inset ring-primary/15">
+                <Users className="size-4" aria-hidden />
+              </span>
+              <div>
+                <p className="text-sm font-semibold">Welcome to {organization.name}</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                  Invite your first tasker so you can assign work and start tracking the field.
+                </p>
+              </div>
+            </div>
+            <Link href="/taskers" className={buttonVariants({ size: "sm", className: "shrink-0" })}>
+              Invite a tasker
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {statCards.map((stat) => {
           const Icon = stat.icon;
@@ -147,7 +168,7 @@ export default async function DashboardPage({
           id="live-heading"
           title="Live field map"
           action={
-            <Link href="/live" className="text-xs font-semibold text-primary hover:underline">
+            <Link href="/live" className="text-xs font-semibold text-primary hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">
               Full map
             </Link>
           }
@@ -211,7 +232,7 @@ export default async function DashboardPage({
           id="grievances-heading"
           title="Grievance queue"
           action={
-            <Link href="/grievances" className="text-xs font-semibold text-primary hover:underline">
+            <Link href="/grievances" className="text-xs font-semibold text-primary hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">
               View queue
             </Link>
           }

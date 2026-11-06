@@ -267,8 +267,7 @@ function statusChain(task: (typeof TASKS)[number]): Array<{ from: string | null;
 }
 
 async function main() {
-  const [dispatchHash, alexHash, mariaHash, samHash, jordanHash] = await Promise.all([
-    hashPassword("Password123!"),
+  const [dispatchHash, alexHash, mariaHash, samHash] = await Promise.all([
     hashPassword("Password123!"),
     hashPassword("Password123!"),
     hashPassword("Password123!"),
@@ -302,6 +301,7 @@ async function main() {
     "sessions",
     "invitations",
     "taskers",
+    "memberships",
     "users",
     "organizations",
   ];
@@ -309,7 +309,7 @@ async function main() {
 
   lines.push("PRAGMA foreign_keys = ON;");
   lines.push(
-    `INSERT INTO organizations (id, name, created_at) VALUES (${sql(ORG_ID)}, ${sql("Acme Field Services")}, ${now - 30 * day});`,
+    `INSERT INTO organizations (id, name, slug, created_at) VALUES (${sql(ORG_ID)}, ${sql("Acme Field Services")}, ${sql("acme-field-services")}, ${now - 30 * day});`,
   );
 
   const people = [
@@ -317,13 +317,16 @@ async function main() {
     [ALEX_ID, "Alex Chen", "alex@example.com", "tasker", "+1 415 555 0101", alexHash],
     [MARIA_ID, "Maria Lopez", "maria@example.com", "tasker", "+1 415 555 0102", mariaHash],
     [SAM_ID, "Sam Patel", "sam@example.com", "tasker", "+1 415 555 0103", samHash],
-    [JORDAN_ID, "Jordan Lee", "jordan@example.com", "tasker", "+1 415 555 0104", jordanHash],
+    [JORDAN_ID, "Jordan Lee", "jordan@example.com", "tasker", "+1 415 555 0104", null],
   ] as const;
 
   for (const [id, name, email, role, phone, hash] of people) {
     const status = id === JORDAN_ID ? "invited" : "active";
     lines.push(
       `INSERT INTO users (id, org_id, role, name, email, phone, password_hash, status, created_at, updated_at) VALUES (${sql(id)}, ${sql(ORG_ID)}, ${sql(role)}, ${sql(name)}, ${sql(email)}, ${sql(phone)}, ${sql(hash)}, ${sql(status)}, ${now - 20 * day}, ${now - 20 * day});`,
+    );
+    lines.push(
+      `INSERT INTO memberships (id, org_id, user_id, role, status, created_at, updated_at) VALUES (${sql(crypto.randomUUID())}, ${sql(ORG_ID)}, ${sql(id)}, ${sql(role)}, ${sql(status)}, ${now - 20 * day}, ${now - 20 * day});`,
     );
   }
 

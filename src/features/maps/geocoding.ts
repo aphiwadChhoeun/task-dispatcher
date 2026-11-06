@@ -28,7 +28,7 @@ export interface GeocodingProvider {
 }
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const USER_AGENT = "TaskDispatcher/1.0 (field task dispatch; contact: support@example.com)";
+const USER_AGENT = config.maps.geocoderUserAgent;
 
 function normalise(value: string): string {
   return value.toLowerCase().replace(/\s+/g, " ").trim();

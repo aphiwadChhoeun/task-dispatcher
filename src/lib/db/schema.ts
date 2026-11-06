@@ -23,12 +23,31 @@ const createdAt = () =>
  * must include it so the MVP can grow into a multi-tenant deployment without
  * a schema migration.
  */
-export const organizations = sqliteTable("organizations", {
-  id: id(),
-  name: text("name").notNull(),
-  createdAt: createdAt(),
-});
+export const organizations = sqliteTable(
+  "organizations",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    /** Stable, URL-safe identifier. Nullable for organizations created before self-serve signup. */
+    slug: text("slug"),
+    /** Optional uploaded brand logo stored in R2. */
+    logoKey: text("logo_key"),
+    brandColor: text("brand_color").notNull().default("#0d5f4c"),
+    accentColor: text("accent_color").notNull().default("#b98132"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("organizations_slug_uq").on(t.slug)],
+);
 
+/**
+ * Global account identity. Email and password live here, while organization
+ * roles are represented by rows in `memberships`. This lets a tasker belong to
+ * multiple organizations while keeping login unambiguous.
+ *
+ * `orgId` and `role` are legacy "primary organization" hints retained so the
+ * migration can upgrade existing deployments without rebuilding the users
+ * table. Application authorization always reads `memberships`.
+ */
 export const users = sqliteTable(
   "users",
   {
@@ -52,15 +71,43 @@ export const users = sqliteTable(
   (t) => [
     index("users_org_idx").on(t.orgId),
     index("users_role_idx").on(t.orgId, t.role),
-    uniqueIndex("users_org_email_uq").on(t.orgId, t.email),
+    uniqueIndex("users_email_uq").on(t.email),
   ],
 );
 
+export const memberships = sqliteTable(
+  "memberships",
+  {
+    id: id(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["dispatcher", "tasker", "admin"] }).notNull(),
+    status: text("status", { enum: ["active", "invited", "deactivated"] })
+      .notNull()
+      .default("active"),
+    createdAt: createdAt(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("memberships_org_user_uq").on(t.orgId, t.userId),
+    index("memberships_user_idx").on(t.userId),
+    index("memberships_org_role_idx").on(t.orgId, t.role),
+    index("memberships_org_status_idx").on(t.orgId, t.status),
+  ],
+);
+
+/** Tasker profile fields are per organization, not per global account. */
 export const taskers = sqliteTable(
   "taskers",
   {
     userId: text("user_id")
-      .primaryKey()
+      .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     orgId: text("org_id")
       .notNull()
@@ -71,7 +118,10 @@ export const taskers = sqliteTable(
     color: text("color").notNull().default("#0f766e"),
     createdAt: createdAt(),
   },
-  (t) => [index("taskers_org_idx").on(t.orgId)],
+  (t) => [
+    primaryKey({ columns: [t.userId, t.orgId] }),
+    index("taskers_org_idx").on(t.orgId),
+  ],
 );
 
 export const sessions = sqliteTable(
@@ -507,6 +557,7 @@ export const geocodeCache = sqliteTable("geocode_cache", {
 
 export type Organization = typeof organizations.$inferSelect;
 export type User = typeof users.$inferSelect;
+export type Membership = typeof memberships.$inferSelect;
 export type Tasker = typeof taskers.$inferSelect;
 export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
@@ -522,5 +573,5 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type TaskStatus = Task["status"];
 export type TaskPriority = Task["priority"];
-export type UserRole = User["role"];
+export type UserRole = Membership["role"];
 export type GrievanceStatus = Grievance["status"];

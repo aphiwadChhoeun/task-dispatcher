@@ -55,6 +55,7 @@ const DISPATCHER_ACTIONS: readonly PermissionAction[] = [
   "grievances.manage",
   "location.read.all",
   "audit.read",
+  "org.manage",
   "api.read",
 ];
 

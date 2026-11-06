@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
-import { announcementRecipients, announcements, users } from "@/lib/db/schema";
+import {
+  announcementRecipients,
+  announcements,
+  memberships,
+  users,
+} from "@/lib/db/schema";
 import { assertSameOrigin } from "@/lib/csrf";
 import { AppError } from "@/lib/errors";
 import { reportError } from "@/lib/observability";
@@ -43,11 +48,13 @@ export async function createAnnouncementAction(
     const db = getDb();
     const recipients = await db
       .select({ id: users.id, name: users.name })
-      .from(users)
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
       .where(
         and(
-          eq(users.orgId, session.orgId),
-          eq(users.role, "tasker"),
+          eq(memberships.orgId, session.orgId),
+          eq(memberships.role, "tasker"),
+          eq(memberships.status, "active"),
           inArray(users.id, parsed.data.recipientIds),
         ),
       );

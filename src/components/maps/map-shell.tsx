@@ -49,13 +49,15 @@ export function MapShell({
   useEffect(() => {
     let cancelled = false;
     let map: MapLibreMap | null = null;
+    let resizeObserver: ResizeObserver | null = null;
     const markerMap = markersRef.current;
 
     async function init() {
       if (!containerRef.current || initializedRef.current) return;
+      const container = containerRef.current;
       initializedRef.current = true;
       const maplibregl = (await import("maplibre-gl")).default;
-      if (cancelled || !containerRef.current) return;
+      if (cancelled) return;
 
       const style: StyleSpecification = {
         version: 8,
@@ -71,7 +73,7 @@ export function MapShell({
       };
 
       map = new maplibregl.Map({
-        container: containerRef.current,
+        container,
         style,
         center,
         zoom,
@@ -81,12 +83,19 @@ export function MapShell({
       mapRef.current = map;
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
+      // MapLibre only listens for window resizes. Cards and split layouts can
+      // change width without one, which leaves the canvas at its initial size.
+      resizeObserver = new ResizeObserver(() => map?.resize());
+      resizeObserver.observe(container);
+      requestAnimationFrame(() => map?.resize());
+
       map.on("click", (event) => {
         callbacksRef.current.onMapClick?.(event.lngLat.lat, event.lngLat.lng);
       });
 
       map.on("load", () => {
         if (!map || cancelled) return;
+        map.resize();
         setReady(true);
         if (!fitToMarkers || fitDoneRef.current || markers.length === 0) return;
         fitDoneRef.current = true;
@@ -105,6 +114,7 @@ export function MapShell({
     return () => {
       cancelled = true;
       setReady(false);
+      resizeObserver?.disconnect();
       for (const marker of markerMap.values()) marker.remove();
       markerMap.clear();
       map?.remove();

@@ -8,6 +8,7 @@ import {
   grievanceAttachments,
   grievanceComments,
   grievances,
+  memberships,
   tasks,
   users,
 } from "@/lib/db/schema";
@@ -38,12 +39,13 @@ async function dispatcherIds(orgId: string): Promise<string[]> {
   const db = getDb();
   const rows = await db
     .select({ id: users.id })
-    .from(users)
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
     .where(
       and(
-        eq(users.orgId, orgId),
-        inArray(users.role, ["dispatcher", "admin"]),
-        eq(users.status, "active"),
+        eq(memberships.orgId, orgId),
+        inArray(memberships.role, ["dispatcher", "admin"]),
+        eq(memberships.status, "active"),
       ),
     );
   return rows.map((row) => row.id);
@@ -299,12 +301,14 @@ export async function updateGrievanceAction(
     if (parsed.data.assigneeId) {
       const assignee = await db
         .select({ id: users.id })
-        .from(users)
+        .from(memberships)
+        .innerJoin(users, eq(memberships.userId, users.id))
         .where(
           and(
-            eq(users.id, parsed.data.assigneeId),
-            eq(users.orgId, session.orgId),
-            inArray(users.role, ["dispatcher", "admin"]),
+            eq(memberships.userId, parsed.data.assigneeId),
+            eq(memberships.orgId, session.orgId),
+            inArray(memberships.role, ["dispatcher", "admin"]),
+            eq(memberships.status, "active"),
           ),
         )
         .get();

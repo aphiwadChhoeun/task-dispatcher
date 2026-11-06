@@ -3,7 +3,7 @@ import { assertApiMutation } from "@/lib/csrf";
 import { apiError, assertFound, json, parseJson, requireApiPermission } from "@/lib/api";
 import { requireApiSession } from "@/features/auth/session";
 import { getDb } from "@/lib/db";
-import { grievances, tasks, users } from "@/lib/db/schema";
+import { grievances, memberships, tasks, users } from "@/lib/db/schema";
 import { isDispatcherRole } from "@/lib/permissions";
 import { recordAudit } from "@/features/audit/log";
 import { publish } from "@/features/events";
@@ -98,12 +98,13 @@ export async function POST(request: Request) {
 
     const dispatchers = await db
       .select({ id: users.id })
-      .from(users)
+      .from(memberships)
+      .innerJoin(users, eq(memberships.userId, users.id))
       .where(
         and(
-          eq(users.orgId, session.orgId),
-          inArray(users.role, ["dispatcher", "admin"]),
-          eq(users.status, "active"),
+          eq(memberships.orgId, session.orgId),
+          inArray(memberships.role, ["dispatcher", "admin"]),
+          eq(memberships.status, "active"),
         ),
       );
 

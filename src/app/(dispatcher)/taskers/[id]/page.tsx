@@ -157,7 +157,7 @@ export default async function TaskerProfilePage({
           <section className="space-y-2">
             <div className="flex items-center justify-between">
               <h2 className="section-label">Active tasks</h2>
-              <Link href={`/tasks?taskerId=${tasker.id}&status=active`} className="text-xs font-semibold text-primary">
+              <Link href={`/tasks?taskerId=${tasker.id}&status=active`} className="text-xs font-semibold text-primary max-sm:inline-flex max-sm:min-h-11 max-sm:items-center">
                 All tasks
               </Link>
             </div>

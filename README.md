@@ -6,6 +6,11 @@ live location, upload proof photos, message dispatch, and file grievances.
 
 ## What is included
 
+- **Self-serve organizations** — a dispatcher can create an organization and its first account at
+  `/signup`; every task, message, location, and audit row stays scoped to that organization.
+- **Organization memberships** — a global account can be a tasker in multiple organizations. Login
+  lets the tasker choose a workspace, and the tasker header includes a switcher. Dispatchers are
+  limited to one organization.
 - **Dispatcher console** — dashboard with Kanban/list views, filters, live map, task CRUD with
   address geocoding and a draggable map pin, tasker management and invites, task timeline,
   per-task messaging, broadcasts, and a grievance queue.
@@ -18,8 +23,9 @@ live location, upload proof photos, message dispatch, and file grievances.
   PBKDF2 auth with D1-backed sessions.
 - **Guardrails** — a single permission matrix, org-scoped data access, server-side state machine,
   Zod validation, CSRF/origin checks, login rate limiting, and MIME/size validation.
-- **Tests** — Vitest for the state machine, permissions, tokens, and validation; Playwright covers
-  the end-to-end dispatcher, tasker, live-location, grievance, and role-isolation flows.
+- **Tests** — Vitest for signup validation, organization slugs, the state machine, permissions,
+  tokens, and validation; Playwright covers the end-to-end organization signup + invite,
+  dispatcher, tasker, live-location, grievance, and role-isolation flows.
 
 ## Stack
 
@@ -66,6 +72,15 @@ npm run preview
 `preview` builds with OpenNext and starts `wrangler dev` on
 [http://localhost:8787](http://localhost:8787). Use this when testing live location or realtime
 messaging. `next dev` on port 3000 is faster for normal UI work.
+
+### Create a new organization
+
+Open [http://localhost:3000/signup](http://localhost:3000/signup) (or `:8787` under `preview`) and
+enter an organization name, your name, email, and password. The first user becomes the
+organization's dispatcher and is signed in. From **Taskers**, invite field staff. A new email creates
+an account in that organization; an existing tasker account can accept the invite to add another
+membership. Log in with email + password — one account can belong to multiple organizations as a
+tasker, so those users choose a workspace after signing in.
 
 ### Demo accounts
 
@@ -126,6 +141,7 @@ Server config is typed in `src/config.ts`; all values can be overridden by envir
 | `NEXT_PUBLIC_APP_URL` | `APP_URL` | Public origin baked into the client build. |
 | `NEXT_PUBLIC_REALTIME_URL` | same origin | Optional separate realtime origin. Leave empty for the same worker. |
 | `SESSION_TTL_DAYS` | `7` | Session lifetime. |
+| `ORG_SELECT_TTL_SECONDS` | `600` | Lifetime of the signed workspace-selection challenge after login. |
 | `MAX_LOGIN_ATTEMPTS` | `5` | Failed attempts per email inside the window. |
 | `LOGIN_WINDOW_MINUTES` | `15` | Rate-limit window. |
 | `INVITE_TTL_DAYS` | `7` | Invitation lifetime. |
@@ -138,6 +154,7 @@ Server config is typed in `src/config.ts`; all values can be overridden by envir
 | `MAP_PROVIDER` / `NEXT_PUBLIC_MAP_PROVIDER` | `osm` | Map adapter selector. |
 | `NEXT_PUBLIC_TILE_URL` | OSM tiles | Raster tile URL. |
 | `GEOCODER` / `GEOCODER_URL` | `nominatim` / public Nominatim | Geocoding adapter. Set `GEOCODER=none` to disable. |
+| `GEOCODER_USER_AGENT` | `TaskDispatcher/1.0 (+APP_URL)` | Nominatim requires an identifying User-Agent. Do not use an `example.com` contact, which returns HTTP 403. |
 | `ROUTING_PROVIDER` / `ROUTING_URL` | `osrm` / public OSRM | Route preview adapter. Set `ROUTING_PROVIDER=none` to disable. |
 | `ENABLE_PUSH` | `false` | Enables the push sender hook (no-op until a sender is configured). |
 | `ENABLE_PWA` | `true` | PWA feature flag. |
@@ -197,23 +214,28 @@ commercial provider in production.
 6. **Optional custom domain**: add a Workers route/custom domain in the Cloudflare dashboard, then
    update `APP_URL` and `NEXT_PUBLIC_APP_URL` and redeploy.
 
-Do **not** run `npm run db:seed:local` against production. Create the first users with a one-off
-script or by adapting `scripts/seed.ts`; the app ships with a single organization for the MVP.
+Do **not** run `npm run db:seed:local` against production. Organizations create themselves through
+`/signup`, and dispatchers invite their taskers from the Taskers page. The seed script is for local
+demo data only.
 
 ## Testing
 
 ```bash
-npm run test        # 33 unit tests
+npm run test        # 37 unit tests
 npm run test:e2e    # builds, resets local D1, starts wrangler, runs Playwright
 ```
 
 Playwright covers:
 
-1. Dispatcher creates a task with a map pin and assigns it.
-2. Tasker accepts, starts driving, starts work, completes, and uploads a proof photo.
-3. Dispatcher receives a live location over the realtime WebSocket.
-4. Tasker files a grievance; dispatcher reviews and comments; tasker sees the update.
-5. Taskers cannot open dispatcher routes, other taskers' tasks, or dispatcher APIs.
+- A dispatcher signs up a new organization, invites a tasker, and the tasker activates the account
+  into that organization.
+- An existing tasker accepts a second organization invite, chooses a workspace at login, and
+  switches organizations from the tasker header.
+- Dispatcher creates a task with a map pin and assigns it.
+- Tasker accepts, starts driving, starts work, completes, and uploads a proof photo.
+- Dispatcher receives a live location over the realtime WebSocket.
+- Tasker files a grievance; dispatcher reviews and comments; tasker sees the update.
+- Taskers cannot open dispatcher routes, other taskers' tasks, or dispatcher APIs.
 
 The E2E suite runs against the OpenNext/Wrangler build (`http://127.0.0.1:8787`) so Durable Objects,
 WebSockets, the proxy, and R2 are exercised. It resets local D1 with `db:reset`; it never touches
@@ -224,9 +246,10 @@ running `npm run preview` before running the suite (the web server owns port 878
 
 ```
 src/
-  app/                     routes: (dispatcher), (tasker), api/v1, files, login, invite
+  app/                     routes: (dispatcher), (tasker), api/v1, files, login, signup, invite
   features/
-    auth/                  password hashing, signed sessions, login/invite actions
+    auth/                  password hashing, signed sessions, login/signup/invite actions
+    organizations/         organization slug generation and tenant helpers
     tasks/                 schema, state machine, queries, services, actions, components
     taskers/               invite/manage taskers
     grievances/            grievance queue, filing, comments, audit
@@ -257,7 +280,14 @@ docs/architecture.md       deeper design notes
 - Server Actions re-check the permission matrix and origin/`Sec-Fetch-Site`; API mutations also
   require same-origin requests. Mutating `GET`s are not used.
 - Every query in the data-access layer is scoped by `org_id` (and task ownership for taskers).
-- Login failures are rate-limited by email and IP in D1.
+  Roles and membership status live in `memberships`, not on the global account.
+- Invitations are bound to both the user and the organization. Accepting one activates a membership
+  in that organization and never changes an existing account's password.
+- Email is globally unique because it is the login identifier. One account can have many tasker
+  memberships; dispatcher membership creation is restricted to organization signup.
+- Login failures are rate-limited by email and IP in D1. Multi-organization accounts receive a
+  short-lived signed challenge cookie before choosing a workspace; it is exchanged for a real
+  session and grants no API access.
 - R2 objects are never public: `/api/files/[...key]` requires a session, verifies the org prefix,
   and checks task/grievance access.
 - Uploads are re-encoded in the browser (stripping EXIF GPS), then validated server-side by MIME,
@@ -292,9 +322,13 @@ standard `next dev` path works natively.
 
 **Assumptions**
 
-- One organization for the MVP; the schema, queries, and sessions are already org-scoped.
-- Email is the login identifier; no email delivery provider is configured, so invite links are shown
-  to the dispatcher to copy/share.
+- Multi-tenant deployments are supported through self-serve organization signup. Dispatchers
+  belong to exactly one organization; taskers can be active in multiple organizations and switch
+  workspaces from the tasker header.
+- Email is the login identifier and is unique across accounts. Organization membership, role, and
+  status are separate from the account.
+- No email delivery provider is configured, so invite links are shown to the dispatcher to
+  copy/share (they are also passed to the pluggable email adapter).
 - OSM tiles/Nominatim/OSRM are used through adapters; production should use self-hosted or paid
   providers with their usage policies and an API key.
 - Dispatchers cannot perform tasker forward transitions (accept/start/complete); taskers own the
@@ -307,7 +341,8 @@ standard `next dev` path works natively.
 **Open questions / next steps**
 
 - Billing, invoicing, SMS, and analytics integrations (the domain-event bus is the intended hook).
-- Multi-org onboarding and an org switcher; email uniqueness is currently per organization.
+- Inviting additional dispatchers and organization settings. The schema already supports multiple
+  tasker memberships; dispatcher membership is intentionally one per account.
 - Real Web Push (VAPID keys, subscription UI/endpoint) and email delivery.
 - Route replay UI on top of `GET /api/v1/tasks/:id/history` and richer reporting exports.
 - Supervisor/client roles (add entries to `src/lib/permissions.ts`; see architecture doc).

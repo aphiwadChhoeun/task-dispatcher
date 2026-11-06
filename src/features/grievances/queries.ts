@@ -7,6 +7,7 @@ import {
   grievanceAttachments,
   grievanceComments,
   grievances,
+  memberships,
   tasks,
   users,
 } from "@/lib/db/schema";
@@ -92,10 +93,14 @@ export async function listGrievanceComments(
     .select({
       comment: grievanceComments,
       authorName: authorUser.name,
-      authorRole: authorUser.role,
+      authorRole: memberships.role,
     })
     .from(grievanceComments)
     .leftJoin(authorUser, eq(authorUser.id, grievanceComments.authorId))
+    .leftJoin(
+      memberships,
+      and(eq(memberships.userId, authorUser.id), eq(memberships.orgId, grievanceComments.orgId)),
+    )
     .where(
       includeInternal
         ? eq(grievanceComments.grievanceId, grievanceId)
@@ -148,12 +153,13 @@ export async function listTaskerTasksForGrievance(db: Db, orgId: string, taskerI
 export async function listDispatcherOptions(db: Db, orgId: string) {
   return db
     .select({ id: users.id, name: users.name })
-    .from(users)
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
     .where(
       and(
-        eq(users.orgId, orgId),
-        inArray(users.role, ["dispatcher", "admin"]),
-        eq(users.status, "active"),
+        eq(memberships.orgId, orgId),
+        inArray(memberships.role, ["dispatcher", "admin"]),
+        eq(memberships.status, "active"),
       ),
     )
     .orderBy(asc(users.name));
@@ -162,8 +168,9 @@ export async function listDispatcherOptions(db: Db, orgId: string) {
 export async function listTaskerOptionsForGrievanceFilter(db: Db, orgId: string) {
   return db
     .select({ id: users.id, name: users.name })
-    .from(users)
-    .where(and(eq(users.orgId, orgId), eq(users.role, "tasker")))
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
+    .where(and(eq(memberships.orgId, orgId), eq(memberships.role, "tasker")))
     .orderBy(asc(users.name));
 }
 

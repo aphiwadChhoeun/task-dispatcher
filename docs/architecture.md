@@ -61,8 +61,23 @@ DO, and forwards the upgrade. Everything else goes to the generated OpenNext han
 - Cookies are HTTP-only, `SameSite=Lax`, and `Secure` when the request is HTTPS. `proxy.ts` can
   verify the signature without a D1 read; layouts still check the DB row.
 - Login rate limiting counts failed attempts by email and IP inside a D1-backed rolling window.
-- Invitations are hashed at rest and single-use. The invite link is shown to the dispatcher and the
-  email adapter is called (no-op by default).
+- Self-serve signup creates an `organizations` row, a global `users` account, and its first
+  `dispatcher` membership in one D1 batch, derives a unique URL-safe organization slug, writes an
+  audit event, and signs the dispatcher in. The client never chooses the organization id.
+- `users` is the global account identity (email + password). `memberships` carries `org_id`, role,
+  and membership status. Email is globally unique because it is the login identifier.
+- A dispatcher has one membership. A tasker may have active memberships in multiple organizations.
+  If login finds more than one active membership, it stores a short-lived signed
+  `td_org_select` challenge cookie and redirects to `/select-organization`; choosing a workspace
+  exchanges that challenge for a real session. The challenge grants no API access.
+- Sessions store `user_id` + `org_id`. Resolution joins `memberships` on both and requires
+  `memberships.status = active`, so deactivating a tasker in one organization does not break their
+  access to another.
+- Invitations are hashed at rest and single-use. Each invitation stores `org_id` and is joined
+  against the user's membership in that organization. A new email activates the account and
+  membership; an existing tasker account accepts the invite to activate an additional membership
+  without changing its password. The invite link is shown to the dispatcher and the email adapter
+  is called (no-op by default).
 - The realtime token is a separate 5-minute HMAC token containing the same identity claims. It is
   sent in the WebSocket URL (not the session cookie) and re-verified by the Durable Object.
 
@@ -70,7 +85,8 @@ DO, and forwards the upgrade. Everything else goes to the generated OpenNext han
 
 D1/SQLite tables (see `src/lib/db/schema.ts`):
 
-- `organizations`, `users`, `taskers`, `sessions`, `invitations`
+- `organizations`, `users` (global accounts), `memberships` (per-org role/status), `taskers`
+  (per-org profile), `sessions`, `invitations`
 - `tasks`, `task_events` (append-only), `task_photos`, `task_attachments`
 - `message_threads`, `messages`, `thread_reads`
 - `announcements`, `announcement_recipients`
@@ -179,8 +195,16 @@ authorization and persistence logic and publishes `location.updated` through the
 resource-level ownership. Server actions call `requirePermission`/`assertCan`; API handlers call
 `requireApiPermission`; layouts redirect by role. `proxy.ts` is a fast pre-check only.
 
-Every table carries `org_id`. All queries in query modules include it, and cross-org lookups are
-added to the tests (`permissions.spec.ts`).
+Every tenant-owned table carries `org_id`. All queries in query modules include it, and cross-org
+lookups are added to the tests (`permissions.spec.ts`). The session context includes the active
+membership and organization, so layouts and `/api/v1/me` can display the tenant and role. Signing up
+creates an isolated organization. Tasker invitations are bound to both the account and the
+dispatcher's organization, and an invite can only activate the matching membership.
+
+Roles are read from the active membership, not from the global account. This is what allows the same
+tasker account to act as `tasker` in several organizations while a dispatcher remains single-org.
+`taskers` is keyed by `(user_id, org_id)` so skills, vehicle, availability, and map color are
+per-organization.
 
 ## Extension guide
 
@@ -231,7 +255,9 @@ providers only requires a style/tile URL change in `config.ts`.
 
 ## Trade-offs and limits
 
-- Single organization in the UI, but every row/query is already org-scoped.
+- Taskers can belong to multiple organizations; dispatchers are intentionally limited to one.
+  Additional dispatcher invites, organization settings, and per-organization display names remain
+  future work. Account name/email are global and shared across memberships.
 - The event bus is in-process per request. Durable side effects are written before publishing; the
   bus is for notifications/integrations, not for correctness.
 - Realtime is one DO per organization. This is simple and sufficient for the MVP; per-tasker or

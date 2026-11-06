@@ -44,6 +44,7 @@ export function TaskerStatusForm({
         type="submit"
         size="sm"
         variant={nextStatus === "deactivated" ? "outline" : "secondary"}
+        className="w-full"
       >
         <Power className="size-4" aria-hidden />
         {nextStatus === "deactivated" ? "Deactivate tasker" : "Reactivate tasker"}
@@ -61,7 +62,7 @@ export function ResendInviteForm({ taskerId }: { taskerId: string }) {
       {state.error ? <Alert variant="error">{state.error}</Alert> : null}
       {state.inviteUrl ? <InviteLink url={state.inviteUrl} /> : null}
       {!open ? (
-        <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
+        <Button type="button" size="sm" variant="outline" className="w-full" onClick={() => setOpen(true)}>
           <RotateCw className="size-4" aria-hidden />
           New invite link
         </Button>

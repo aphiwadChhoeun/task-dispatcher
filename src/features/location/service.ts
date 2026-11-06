@@ -1,13 +1,13 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { locations, taskerPresence, type User } from "@/lib/db/schema";
+import { locations, taskerPresence } from "@/lib/db/schema";
 import { ForbiddenError, NotFoundError } from "@/lib/errors";
-import { canShareLocation } from "@/lib/permissions";
+import { canShareLocation, type Role } from "@/lib/permissions";
 import { getTaskById } from "@/features/tasks/queries";
 import { publish } from "@/features/events";
 
-type Actor = Pick<User, "id" | "orgId" | "role" | "name">;
+type Actor = { id: string; orgId: string; role: Role; name: string };
 
 export type LocationInput = {
   lat: number;

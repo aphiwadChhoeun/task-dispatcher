@@ -4,11 +4,20 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, eq, gt, lt } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { sessions, users, type User } from "@/lib/db/schema";
+import {
+  memberships,
+  organizations,
+  sessions,
+  users,
+  type Membership,
+  type Organization,
+  type User,
+} from "@/lib/db/schema";
 import { getAuthSecret } from "@/lib/server-env";
 import { config } from "@/config";
 import { UnauthorizedError } from "@/lib/errors";
 import { assertCan, type PermissionAction, type Role } from "@/lib/permissions";
+import { signToken, verifyToken } from "@/lib/signed-token";
 import {
   createSessionToken,
   newSessionId,
@@ -16,9 +25,19 @@ import {
   verifySessionToken,
 } from "./session-token";
 
-export type SessionContext = {
-  user: User;
+/** The authenticated account plus the active organization membership. */
+export type SessionUser = User & {
   orgId: string;
+  role: Role;
+  membershipId: string;
+  membershipStatus: Membership["status"];
+};
+
+export type SessionContext = {
+  user: SessionUser;
+  membership: Membership;
+  orgId: string;
+  organization: Organization;
 };
 
 const SESSION_TTL_SECONDS = config.auth.sessionTtlDays * 24 * 60 * 60;
@@ -45,7 +64,11 @@ async function isSecureRequest(): Promise<boolean> {
   }
 }
 
-export async function createSession(user: User, userAgent?: string | null): Promise<void> {
+export async function createSession(
+  user: User,
+  membership: Membership,
+  userAgent?: string | null,
+): Promise<void> {
   const db = getDb();
   const sid = newSessionId();
   const id = await sha256Hex(sid);
@@ -54,7 +77,7 @@ export async function createSession(user: User, userAgent?: string | null): Prom
   await db.insert(sessions).values({
     id,
     userId: user.id,
-    orgId: user.orgId,
+    orgId: membership.orgId,
     expiresAt,
     userAgent: userAgent?.slice(0, 300) ?? null,
   });
@@ -65,7 +88,7 @@ export async function createSession(user: User, userAgent?: string | null): Prom
   }
 
   const token = await createSessionToken(
-    { sid, sub: user.id, org: user.orgId, role: user.role, name: user.name },
+    { sid, sub: user.id, org: membership.orgId, role: membership.role, name: user.name },
     getAuthSecret(),
     SESSION_TTL_SECONDS,
   );
@@ -87,16 +110,45 @@ async function resolveSession(token: string | null | undefined): Promise<Session
   const id = await sha256Hex(payload.sid);
   const db = getDb();
   const row = await db
-    .select({ user: users, expiresAt: sessions.expiresAt })
+    .select({
+      user: users,
+      membership: memberships,
+      organization: organizations,
+      expiresAt: sessions.expiresAt,
+    })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
-    .where(and(eq(sessions.id, id), gt(sessions.expiresAt, new Date())))
+    .innerJoin(
+      memberships,
+      and(eq(memberships.userId, sessions.userId), eq(memberships.orgId, sessions.orgId)),
+    )
+    .innerJoin(organizations, eq(memberships.orgId, organizations.id))
+    .where(
+      and(
+        eq(sessions.id, id),
+        gt(sessions.expiresAt, new Date()),
+        eq(memberships.status, "active"),
+      ),
+    )
     .get();
 
   if (!row) return null;
   if (row.user.status !== "active") return null;
-  if (row.user.orgId !== payload.org) return null;
-  return { user: row.user, orgId: row.user.orgId };
+  if (row.membership.orgId !== payload.org) return null;
+  if (row.membership.role !== payload.role) return null;
+
+  return {
+    user: {
+      ...row.user,
+      orgId: row.membership.orgId,
+      role: row.membership.role,
+      membershipId: row.membership.id,
+      membershipStatus: row.membership.status,
+    },
+    membership: row.membership,
+    orgId: row.membership.orgId,
+    organization: row.organization,
+  };
 }
 
 export const getSession = cache(async (): Promise<SessionContext | null> => {
@@ -139,6 +191,44 @@ export async function destroySession(): Promise<void> {
     }
   }
   store.delete(config.auth.cookieName);
+}
+
+type OrgSelectChallenge = { sub: string; exp: number; type: "org_select" };
+
+/**
+ * A short-lived, signed cookie used only between password verification and
+ * choosing which organization to open. It is not a session and grants no API
+ * access; `/select-organization` exchanges it for a real session.
+ */
+export async function createOrgSelectChallenge(userId: string): Promise<void> {
+  const payload: OrgSelectChallenge = {
+    sub: userId,
+    exp: Math.floor(Date.now() / 1000) + config.auth.orgSelectTtlSeconds,
+    type: "org_select",
+  };
+  const token = await signToken(payload, getAuthSecret());
+  const store = await cookies();
+  store.set(config.auth.orgSelectCookieName, token, {
+    httpOnly: true,
+    secure: await isSecureRequest(),
+    sameSite: "lax",
+    path: "/",
+    maxAge: config.auth.orgSelectTtlSeconds,
+  });
+}
+
+export async function getOrgSelectChallengeUserId(): Promise<string | null> {
+  const store = await cookies();
+  const token = store.get(config.auth.orgSelectCookieName)?.value;
+  const payload = await verifyToken<OrgSelectChallenge>(token, getAuthSecret());
+  if (!payload || payload.type !== "org_select" || !payload.sub) return null;
+  if (payload.exp * 1000 < Date.now()) return null;
+  return payload.sub;
+}
+
+export async function clearOrgSelectChallenge(): Promise<void> {
+  const store = await cookies();
+  store.delete(config.auth.orgSelectCookieName);
 }
 
 /** For route handlers that receive a raw Request. */

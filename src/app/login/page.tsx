@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Activity, CheckCircle2, MapPin, MapPinned, ShieldCheck } from "lucide-react";
 import { Alert } from "@/components/ui/feedback";
@@ -125,11 +126,11 @@ export default async function LoginPage({
             <span className="size-1.5 rounded-full bg-accent" aria-hidden />
             Built for teams in the field
           </span>
-          <h1 className="mt-6 text-[2.6rem] font-semibold leading-[1.08] tracking-[-0.035em] text-sidebar-foreground xl:text-[3rem]">
+          <p className="mt-6 text-[2.6rem] font-semibold leading-[1.08] tracking-[-0.035em] text-sidebar-foreground xl:text-[3rem]">
             Every task. Every stop.
             <br />
             <span className="text-[#9fe3ce]">Under control.</span>
-          </h1>
+          </p>
           <p className="mt-5 max-w-md text-[15px] leading-relaxed text-sidebar-muted">
             Dispatch work, follow your team live, and close the loop with proof of work — without
             the paperwork.
@@ -180,12 +181,9 @@ export default async function LoginPage({
 
           <div className="mt-7 lg:mt-0">
             <p className="section-label mb-3 lg:hidden">Welcome back</p>
-            <h2 className="hidden text-[1.9rem] font-semibold tracking-[-0.03em] lg:block">
+            <h1 className="text-[1.65rem] font-semibold tracking-[-0.03em] lg:text-[1.9rem]">
               Sign in to continue
-            </h2>
-            <h2 className="text-[1.65rem] font-semibold tracking-[-0.03em] lg:hidden">
-              Sign in to continue
-            </h2>
+            </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               Use the account your dispatcher set up for you.
             </p>
@@ -198,6 +196,12 @@ export default async function LoginPage({
               </Alert>
             ) : null}
             <LoginForm next={next} />
+            <p className="mt-4 border-t border-border/70 pt-4 text-center text-xs text-muted-foreground">
+              New organization?{" "}
+              <Link href="/signup" className="inline-flex min-h-11 items-center font-semibold text-primary hover:underline">
+                Create a workspace
+              </Link>
+            </p>
           </div>
 
           {showDemo ? (
@@ -231,7 +235,7 @@ export default async function LoginPage({
           ) : null}
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            Access is by invitation from your dispatcher.
+            Taskers join by invitation from their dispatcher.
           </p>
         </div>
       </section>

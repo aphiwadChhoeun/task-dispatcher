@@ -20,6 +20,7 @@ import type { Db } from "@/lib/db";
 import {
   grievances,
   locations,
+  memberships,
   messageThreads,
   messages,
   taskAttachments,
@@ -93,7 +94,7 @@ export async function listTasks(
     })
     .from(tasks)
     .leftJoin(taskerUser, eq(tasks.taskerId, taskerUser.id))
-    .leftJoin(taskers, eq(taskers.userId, taskerUser.id))
+    .leftJoin(taskers, and(eq(taskers.userId, taskerUser.id), eq(taskers.orgId, orgId)))
     .where(and(...conditions))
     .orderBy(asc(tasks.scheduledStart), desc(tasks.createdAt))
     .limit(limit);
@@ -122,7 +123,7 @@ export async function getTaskById(
     })
     .from(tasks)
     .leftJoin(taskerUser, eq(tasks.taskerId, taskerUser.id))
-    .leftJoin(taskers, eq(taskers.userId, taskerUser.id))
+    .leftJoin(taskers, and(eq(taskers.userId, taskerUser.id), eq(taskers.orgId, orgId)))
     .where(and(eq(tasks.id, id), eq(tasks.orgId, orgId)))
     .get();
 
@@ -141,10 +142,14 @@ export async function listTaskEvents(db: Db, orgId: string, taskId: string) {
     .select({
       event: taskEvents,
       actorName: actorUser.name,
-      actorRole: actorUser.role,
+      actorRole: memberships.role,
     })
     .from(taskEvents)
     .leftJoin(actorUser, eq(taskEvents.actorId, actorUser.id))
+    .leftJoin(
+      memberships,
+      and(eq(memberships.userId, actorUser.id), eq(memberships.orgId, taskEvents.orgId)),
+    )
     .where(and(eq(taskEvents.orgId, orgId), eq(taskEvents.taskId, taskId)))
     .orderBy(desc(taskEvents.createdAt))
     .limit(100);
@@ -177,13 +182,17 @@ export async function listTaskerOptions(db: Db, orgId: string) {
       name: users.name,
       email: users.email,
       phone: users.phone,
-      status: users.status,
+      status: memberships.status,
       color: taskers.color,
       skills: taskers.skills,
     })
-    .from(users)
-    .leftJoin(taskers, eq(taskers.userId, users.id))
-    .where(and(eq(users.orgId, orgId), eq(users.role, "tasker")))
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
+    .leftJoin(
+      taskers,
+      and(eq(taskers.userId, users.id), eq(taskers.orgId, orgId)),
+    )
+    .where(and(eq(memberships.orgId, orgId), eq(memberships.role, "tasker")))
     .orderBy(asc(users.name));
 }
 
@@ -192,9 +201,12 @@ export async function listTaskers(
   orgId: string,
   filters: TaskerFilters = {},
 ) {
-  const conditions = [eq(users.orgId, orgId), eq(users.role, "tasker")];
+  const conditions = [
+    eq(memberships.orgId, orgId),
+    eq(memberships.role, "tasker"),
+  ];
 
-  if (filters.status) conditions.push(eq(users.status, filters.status));
+  if (filters.status) conditions.push(eq(memberships.status, filters.status));
   if (filters.q) {
     const pattern = `%${filters.q.replaceAll("%", "").replaceAll("_", "")}%`;
     conditions.push(
@@ -212,10 +224,15 @@ export async function listTaskers(
   const people = await db
     .select({
       user: users,
+      membership: memberships,
       tasker: taskers,
     })
-    .from(users)
-    .leftJoin(taskers, eq(taskers.userId, users.id))
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
+    .leftJoin(
+      taskers,
+      and(eq(taskers.userId, users.id), eq(taskers.orgId, orgId)),
+    )
     .where(and(...conditions))
     .orderBy(asc(users.name));
 
@@ -229,6 +246,8 @@ export async function listTaskers(
 
   return people.map((row) => ({
     ...row.user,
+    status: row.membership.status,
+    createdAt: row.membership.createdAt,
     color: row.tasker?.color ?? "#0f766e",
     skills: row.tasker?.skills ?? null,
     vehicle: row.tasker?.vehicle ?? null,
@@ -239,14 +258,26 @@ export async function listTaskers(
 
 export async function getTaskerProfile(db: Db, orgId: string, userId: string) {
   const row = await db
-    .select({ user: users, tasker: taskers })
-    .from(users)
-    .leftJoin(taskers, eq(taskers.userId, users.id))
-    .where(and(eq(users.orgId, orgId), eq(users.id, userId), eq(users.role, "tasker")))
+    .select({ user: users, membership: memberships, tasker: taskers })
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
+    .leftJoin(
+      taskers,
+      and(eq(taskers.userId, users.id), eq(taskers.orgId, orgId)),
+    )
+    .where(
+      and(
+        eq(memberships.orgId, orgId),
+        eq(memberships.userId, userId),
+        eq(memberships.role, "tasker"),
+      ),
+    )
     .get();
   if (!row) return null;
   return {
     ...row.user,
+    status: row.membership.status,
+    createdAt: row.membership.createdAt,
     color: row.tasker?.color ?? "#0f766e",
     skills: row.tasker?.skills ?? null,
     vehicle: row.tasker?.vehicle ?? null,
@@ -305,10 +336,14 @@ export async function listThreadMessages(
       createdAt: messages.createdAt,
       senderId: messages.senderId,
       senderName: senderUser.name,
-      senderRole: senderUser.role,
+      senderRole: memberships.role,
     })
     .from(messages)
     .leftJoin(senderUser, eq(messages.senderId, senderUser.id))
+    .leftJoin(
+      memberships,
+      and(eq(memberships.userId, senderUser.id), eq(memberships.orgId, messages.orgId)),
+    )
     .where(and(eq(messages.orgId, orgId), eq(messages.threadId, threadId)))
     .orderBy(asc(messages.createdAt))
     .limit(limit);
@@ -384,7 +419,7 @@ export async function listActiveTasksForMap(db: Db, orgId: string) {
     })
     .from(tasks)
     .leftJoin(taskerUser, eq(tasks.taskerId, taskerUser.id))
-    .leftJoin(taskers, eq(taskers.userId, taskerUser.id))
+    .leftJoin(taskers, and(eq(taskers.userId, taskerUser.id), eq(taskers.orgId, orgId)))
     .where(and(eq(tasks.orgId, orgId), inArray(tasks.status, [...ACTIVE_STATUSES])))
     .orderBy(asc(tasks.scheduledStart));
 }
@@ -417,7 +452,7 @@ export async function listPresence(db: Db, orgId: string): Promise<PresenceItem[
     })
     .from(taskerPresence)
     .innerJoin(users, eq(taskerPresence.taskerId, users.id))
-    .leftJoin(taskers, eq(taskers.userId, taskerPresence.taskerId))
+    .leftJoin(taskers, and(eq(taskers.userId, taskerPresence.taskerId), eq(taskers.orgId, orgId)))
     .leftJoin(tasks, eq(tasks.id, taskerPresence.taskId))
     .where(eq(taskerPresence.orgId, orgId))
     .orderBy(desc(taskerPresence.updatedAt));
@@ -456,7 +491,7 @@ export async function getPresenceForTasker(
     })
     .from(taskerPresence)
     .innerJoin(users, eq(taskerPresence.taskerId, users.id))
-    .leftJoin(taskers, eq(taskers.userId, taskerPresence.taskerId))
+    .leftJoin(taskers, and(eq(taskers.userId, taskerPresence.taskerId), eq(taskers.orgId, orgId)))
     .leftJoin(tasks, eq(tasks.id, taskerPresence.taskId))
     .where(and(eq(taskerPresence.orgId, orgId), eq(taskerPresence.taskerId, taskerId)))
     .get();
@@ -493,8 +528,14 @@ export async function getDashboardStats(db: Db, orgId: string) {
 
   const [taskerRow] = await db
     .select({ n: count() })
-    .from(users)
-    .where(and(eq(users.orgId, orgId), eq(users.role, "tasker"), eq(users.status, "active")));
+    .from(memberships)
+    .where(
+      and(
+        eq(memberships.orgId, orgId),
+        eq(memberships.role, "tasker"),
+        eq(memberships.status, "active"),
+      ),
+    );
 
   const [openGrievances] = await db
     .select({ n: count() })

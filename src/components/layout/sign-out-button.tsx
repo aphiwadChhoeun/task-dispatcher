@@ -28,7 +28,7 @@ export function SignOutButton({
         type="submit"
         className={cn(
           "inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-          compact && "min-h-9 size-9 justify-center px-0",
+          compact && "min-h-11 size-11 justify-center px-0",
           className,
         )}
       >

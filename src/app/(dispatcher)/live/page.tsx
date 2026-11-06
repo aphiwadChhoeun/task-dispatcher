@@ -79,7 +79,7 @@ export default async function LivePage() {
             </p>
             <Link
               href={`/taskers/${item.taskerId}`}
-              className="mt-2.5 inline-block text-xs font-semibold text-primary hover:underline"
+              className="mt-2.5 inline-block text-xs font-semibold text-primary hover:underline max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
             >
               View profile
             </Link>

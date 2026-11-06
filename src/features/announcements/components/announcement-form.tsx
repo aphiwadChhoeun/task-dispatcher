@@ -42,7 +42,7 @@ export function AnnouncementForm({
           {taskers.map((tasker) => (
             <label
               key={tasker.id}
-              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm hover:bg-muted"
+              className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border px-3 text-sm transition-colors hover:bg-muted has-[:checked]:border-primary/30 has-[:checked]:bg-primary/[0.055]"
             >
               <input
                 type="checkbox"

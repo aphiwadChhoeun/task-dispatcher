@@ -3,23 +3,33 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Building2,
   ClipboardList,
   LayoutDashboard,
   Map,
   Megaphone,
   ShieldAlert,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { t } from "@/i18n/messages";
 
-const dispatcherItems = [
+type DispatcherNavItem = {
+  href: string;
+  label: string;
+  shortLabel?: string;
+  icon: LucideIcon;
+};
+
+const dispatcherItems: DispatcherNavItem[] = [
   { href: "/dashboard", label: t("nav.dashboard"), icon: LayoutDashboard },
   { href: "/tasks", label: t("nav.tasks"), icon: ClipboardList },
   { href: "/live", label: t("nav.live"), icon: Map },
   { href: "/taskers", label: t("nav.taskers"), icon: Users },
   { href: "/grievances", label: t("nav.grievances"), icon: ShieldAlert },
   { href: "/announcements", label: "Broadcasts", icon: Megaphone },
+  { href: "/organization", label: "Organization", shortLabel: "Org", icon: Building2 },
 ];
 
 const taskerItems = [
@@ -61,7 +71,7 @@ export function DispatcherSideNav() {
               className={cn(
                 "flex size-7 shrink-0 items-center justify-center rounded-lg transition-colors",
                 active
-                  ? "bg-primary/25 text-[#9fe3ce]"
+                  ? "bg-primary/25 text-[color-mix(in_srgb,var(--primary)_35%,white)]"
                   : "text-sidebar-muted group-hover:text-sidebar-foreground",
               )}
             >
@@ -82,7 +92,7 @@ export function DispatcherBottomNav() {
       aria-label="Primary"
       className="fixed inset-x-2 bottom-2 z-40 overflow-hidden rounded-2xl border border-border/80 nav-glass shadow-[0_18px_40px_-16px_rgb(18_26_22/0.35)] lg:hidden safe-bottom"
     >
-      <div className="mx-auto grid max-w-lg grid-cols-6">
+      <div className="mx-auto grid max-w-lg grid-cols-7">
         {dispatcherItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(pathname, item.href);
@@ -104,7 +114,7 @@ export function DispatcherBottomNav() {
                 aria-hidden
               />
               <Icon className={cn("size-[18px]", active && "stroke-[2.4]")} aria-hidden />
-              <span className="truncate">{item.label}</span>
+              <span className="truncate">{item.shortLabel ?? item.label}</span>
             </Link>
           );
         })}

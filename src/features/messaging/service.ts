@@ -1,10 +1,9 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { messages, users } from "@/lib/db/schema";
+import { memberships, messages, users } from "@/lib/db/schema";
 import { ForbiddenError, NotFoundError, AppError } from "@/lib/errors";
-import { canReadTaskMessages, isDispatcherRole } from "@/lib/permissions";
-import type { User } from "@/lib/db/schema";
+import { canReadTaskMessages, isDispatcherRole, type Role } from "@/lib/permissions";
 import { publish } from "@/features/events";
 import {
   ensureTaskThread,
@@ -21,18 +20,19 @@ export type MessageAttachment = {
   size: number;
 };
 
-type Actor = Pick<User, "id" | "orgId" | "role" | "name">;
+type Actor = { id: string; orgId: string; role: Role; name: string };
 
 async function dispatcherIds(orgId: string): Promise<string[]> {
   const db = getDb();
   const rows = await db
     .select({ id: users.id })
-    .from(users)
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
     .where(
       and(
-        eq(users.orgId, orgId),
-        inArray(users.role, ["dispatcher", "admin"]),
-        eq(users.status, "active"),
+        eq(memberships.orgId, orgId),
+        inArray(memberships.role, ["dispatcher", "admin"]),
+        eq(memberships.status, "active"),
       ),
     );
   return rows.map((row) => row.id);

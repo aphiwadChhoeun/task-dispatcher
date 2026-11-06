@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { MapPinned } from "lucide-react";
 import { DispatcherBottomNav, DispatcherSideNav } from "@/components/layout/nav";
 import { SignOutButton } from "@/components/layout/sign-out-button";
 import { requireDispatcher } from "@/features/auth/session";
+import { OrganizationLogo } from "@/features/organizations/components/organization-logo";
+import { organizationThemeStyle } from "@/features/organizations/theme";
 import { initials } from "@/lib/utils";
 import { config } from "@/config";
 
@@ -15,15 +16,16 @@ export const metadata: Metadata = {
 };
 
 export default async function DispatcherLayout({ children }: { children: ReactNode }) {
-  const { user } = await requireDispatcher();
+  const { user, organization } = await requireDispatcher();
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[268px_minmax(0,1fr)]">
+    <div
+      className="min-h-dvh lg:grid lg:grid-cols-[268px_minmax(0,1fr)]"
+      style={organizationThemeStyle(organization)}
+    >
       <aside className="sidebar-surface hidden h-dvh flex-col border-r border-sidebar-border p-4 text-sidebar-foreground lg:sticky lg:top-0 lg:flex">
         <Link href="/dashboard" className="mb-8 flex items-center gap-3 px-2 pt-1">
-          <span className="brand-mark flex size-10 items-center justify-center rounded-xl text-primary-foreground">
-            <MapPinned className="size-5" aria-hidden />
-          </span>
+          <OrganizationLogo organization={organization} className="size-10 rounded-xl" />
           <span className="min-w-0">
             <span className="flex items-center gap-1.5">
               <span className="block truncate text-[15px] font-semibold tracking-[-0.02em]">
@@ -31,8 +33,8 @@ export default async function DispatcherLayout({ children }: { children: ReactNo
               </span>
               <span className="size-1.5 rounded-full bg-accent" aria-hidden />
             </span>
-            <span className="block text-[10.5px] font-medium uppercase tracking-[0.16em] text-sidebar-muted">
-              Dispatch console
+            <span className="block truncate text-[10.5px] font-medium uppercase tracking-[0.14em] text-sidebar-muted">
+              {organization.name}
             </span>
           </span>
         </Link>
@@ -55,11 +57,20 @@ export default async function DispatcherLayout({ children }: { children: ReactNo
 
       <div className="min-w-0">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/70 nav-glass px-4 lg:hidden">
-          <Link href="/dashboard" className="flex items-center gap-2.5">
-            <span className="brand-mark flex size-9 items-center justify-center rounded-xl text-primary-foreground">
-              <MapPinned className="size-4" aria-hidden />
+          <Link href="/dashboard" className="flex min-h-11 min-w-0 items-center gap-2.5">
+            <OrganizationLogo
+              organization={organization}
+              className="size-9 rounded-xl"
+              iconClassName="size-4"
+            />
+            <span className="min-w-0">
+              <span className="block truncate text-[15px] font-semibold leading-tight tracking-[-0.02em]">
+                {config.app.name}
+              </span>
+              <span className="block truncate text-[10.5px] text-muted-foreground">
+                {organization.name}
+              </span>
             </span>
-            <span className="text-[15px] font-semibold tracking-[-0.02em]">{config.app.name}</span>
           </Link>
           <div className="flex items-center gap-1.5">
             <span className="flex size-8 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-secondary-foreground">

@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/login", "/invite/", "/offline"],
+        allow: ["/", "/login", "/signup", "/invite/", "/offline"],
         disallow: [
           "/api/",
           "/dashboard",
@@ -18,6 +18,7 @@ export default function robots(): MetadataRoute.Robots {
           "/announcements",
           "/my-tasks",
           "/my-grievances",
+          "/select-organization",
         ],
       },
     ],

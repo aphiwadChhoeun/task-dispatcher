@@ -1,11 +1,8 @@
 import { Camera } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { fileUrl } from "@/features/files/url";
 import type { TaskPhoto } from "@/lib/db/schema";
 import { formatDateTime, titleCase } from "@/lib/format";
-
-function fileUrl(key: string): string {
-  return `/api/files/${key.split("/").map(encodeURIComponent).join("/")}`;
-}
+import { PhotoGalleryGrid, type PhotoViewerItem } from "./photo-gallery-grid";
 
 export function TaskPhotoGallery({
   photos,
@@ -21,29 +18,15 @@ export function TaskPhotoGallery({
     );
   }
 
-  return (
-    <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-      {photos.map(({ photo, uploaderName }) => (
-        <li key={photo.id} className="group overflow-hidden rounded-2xl border border-border/85 bg-card shadow-card">
-          <a href={fileUrl(photo.r2Key)} target="_blank" rel="noreferrer" className="block overflow-hidden">
-            <img
-              src={fileUrl(photo.r2Key)}
-              alt={photo.caption ?? `${titleCase(photo.kind)} proof photo`}
-              loading="lazy"
-              className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-            />
-          </a>
-          <div className="space-y-1 p-2.5">
-            <Badge variant="secondary" className="capitalize">
-              {photo.kind}
-            </Badge>
-            {photo.caption ? <p className="line-clamp-2 text-xs">{photo.caption}</p> : null}
-            <p className="text-[11px] text-muted-foreground">
-              {uploaderName ?? "Tasker"} · {formatDateTime(photo.createdAt)}
-            </p>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
+  const items: PhotoViewerItem[] = photos.map(({ photo, uploaderName }) => ({
+    id: photo.id,
+    url: fileUrl(photo.r2Key),
+    alt: photo.caption ?? `${titleCase(photo.kind)} proof photo`,
+    kind: photo.kind,
+    caption: photo.caption,
+    uploaderName,
+    createdAtLabel: formatDateTime(photo.createdAt),
+  }));
+
+  return <PhotoGalleryGrid photos={items} />;
 }

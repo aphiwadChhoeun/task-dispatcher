@@ -35,6 +35,9 @@ export async function GET(
       if (!isDispatcherRole(session.user.role) && grievance.taskerId !== session.user.id) {
         throw new ForbiddenError("You cannot access this file");
       }
+    } else if (scope === "organizations") {
+      // Organization branding is visible to every active member of the workspace.
+      if (entityId !== session.orgId) throw new ForbiddenError("You cannot access this file");
     } else {
       throw new NotFoundError("File not found");
     }

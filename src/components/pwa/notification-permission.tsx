@@ -39,7 +39,7 @@ export function NotificationPermission() {
       </Button>
       <button
         type="button"
-        className="text-xs font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+        className="inline-flex min-h-11 items-center px-1 text-xs font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
         onClick={() => {
           localStorage.setItem(DISMISS_KEY, "1");
           setDismissed(true);

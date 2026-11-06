@@ -64,7 +64,7 @@ export default async function TaskerTaskPage({
         title={task.title}
         description={formatWindow(task.scheduledStart, task.scheduledEnd)}
         actions={
-          <Link href="/my-tasks" className="text-sm font-semibold text-primary hover:underline">
+          <Link href="/my-tasks" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline">
             All tasks
           </Link>
         }
@@ -111,7 +111,7 @@ export default async function TaskerTaskPage({
                 {task.customerName ?? "Customer"}
                 {task.customerPhone ? (
                   <a
-                    className="inline-flex items-center gap-1 font-medium text-primary"
+                    className="inline-flex min-h-11 items-center gap-1 font-medium text-primary"
                     href={`tel:${task.customerPhone}`}
                   >
                     <Phone className="size-3.5" aria-hidden />

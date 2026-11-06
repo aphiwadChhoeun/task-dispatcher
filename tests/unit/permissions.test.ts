@@ -31,7 +31,7 @@ describe("permission matrix", () => {
     expect(can("dispatcher", "grievances.manage")).toBe(true);
     expect(can("dispatcher", "grievances.create")).toBe(false);
     expect(can("dispatcher", "location.share")).toBe(false);
-    expect(can("dispatcher", "org.manage")).toBe(false);
+    expect(can("dispatcher", "org.manage")).toBe(true);
   });
 
   it("limits taskers to their own work", () => {

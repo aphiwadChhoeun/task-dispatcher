@@ -29,9 +29,15 @@ export default async function InvitePage({
             <MapPinned className="size-6" aria-hidden />
           </div>
           <p className="section-label mb-2 justify-center">You are invited</p>
-          <h1 className="text-2xl font-semibold tracking-[-0.03em]">Accept your invitation</h1>
+          <h1 className="text-2xl font-semibold tracking-[-0.03em]">
+            {invitation ? `Join ${invitation.organizationName}` : "Accept your invitation"}
+          </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Set a password to activate your tasker account.
+            {invitation
+              ? invitation.user.passwordHash
+                ? `Add ${invitation.organizationName} to your existing Task Dispatcher account.`
+                : `Set a password to create your tasker account for ${invitation.organizationName} on Task Dispatcher.`
+              : "Set a password to activate your tasker account."}
           </p>
         </div>
 
@@ -41,6 +47,7 @@ export default async function InvitePage({
               token={token}
               email={invitation.user.email}
               defaultName={invitation.user.name}
+              existingAccount={Boolean(invitation.user.passwordHash)}
             />
           ) : (
             <div className="space-y-4 text-center">

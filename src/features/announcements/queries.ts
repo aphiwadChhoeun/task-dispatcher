@@ -4,6 +4,7 @@ import type { Db } from "@/lib/db";
 import {
   announcementRecipients,
   announcements,
+  memberships,
   users,
 } from "@/lib/db/schema";
 
@@ -71,12 +72,13 @@ export async function listAnnouncementsForTasker(
 export async function listAllTaskerRecipients(db: Db, orgId: string) {
   return db
     .select({ id: users.id, name: users.name })
-    .from(users)
+    .from(memberships)
+    .innerJoin(users, eq(memberships.userId, users.id))
     .where(
       and(
-        eq(users.orgId, orgId),
-        eq(users.role, "tasker"),
-        inArray(users.status, ["active", "invited"]),
+        eq(memberships.orgId, orgId),
+        eq(memberships.role, "tasker"),
+        eq(memberships.status, "active"),
       ),
     )
     .orderBy(asc(users.name));

@@ -20,7 +20,9 @@ export const config = {
   auth: {
     cookieName: "td_session",
     csrfCookieName: "td_csrf",
+    orgSelectCookieName: "td_org_select",
     sessionTtlDays: int(process.env.SESSION_TTL_DAYS, 7),
+    orgSelectTtlSeconds: int(process.env.ORG_SELECT_TTL_SECONDS, 600),
     maxLoginAttempts: int(process.env.MAX_LOGIN_ATTEMPTS, 5),
     loginWindowMinutes: int(process.env.LOGIN_WINDOW_MINUTES, 15),
     inviteTtlDays: int(process.env.INVITE_TTL_DAYS, 7),
@@ -57,6 +59,13 @@ export const config = {
     tileAttribution: "&copy; OpenStreetMap contributors",
     geocoder: process.env.GEOCODER ?? "nominatim",
     geocoderUrl: process.env.GEOCODER_URL ?? "https://nominatim.openstreetmap.org",
+    /**
+     * Nominatim requires a User-Agent that identifies the application. Do not
+     * use a placeholder email (example.com addresses are blocked with 403).
+     */
+    geocoderUserAgent:
+      process.env.GEOCODER_USER_AGENT ??
+      `TaskDispatcher/1.0 (+${publicOrigin.replace(/\/$/, "")})`,
     routing: process.env.ROUTING_PROVIDER ?? "osrm",
     routingUrl: process.env.ROUTING_URL ?? "https://router.project-osrm.org",
   },

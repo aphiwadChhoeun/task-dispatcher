@@ -79,10 +79,10 @@ export async function validateUpload(
 
 export function storageKey(
   orgId: string,
-  scope: "tasks" | "grievances",
+  scope: "tasks" | "grievances" | "organizations",
   entityId: string,
   extension: string,
-  kind: "photo" | "attachment",
+  kind: "photo" | "attachment" | "logo",
 ): string {
   const safeExt = extension.replace(/[^a-z0-9]/gi, "").slice(0, 6) || "bin";
   return `${orgId}/${scope}/${entityId}/${kind}-${crypto.randomUUID()}.${safeExt}`;

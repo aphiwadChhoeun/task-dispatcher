@@ -22,9 +22,11 @@ export default async function MyGrievancesPage() {
         title="My grievances"
         description="Track what you filed and any dispatcher response."
         actions={
-          <Link href="/my-grievances/new" className={buttonVariants({ size: "sm" })}>
-            File a grievance
-          </Link>
+          rows.length > 0 ? (
+            <Link href="/my-grievances/new" className={buttonVariants({ size: "sm" })}>
+              File a grievance
+            </Link>
+          ) : undefined
         }
       />
       {rows.length === 0 ? (
